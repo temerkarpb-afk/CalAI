@@ -48,7 +48,7 @@ dp = Dispatcher(storage=storage)
 client = AsyncGroq(api_key=GROQ_API_KEY)
 
 # --- Middleware для логирования всех сообщений ---
-@dp.message.outer_middleware()
+@dp.message.middleware()
 async def log_middleware(handler, message, data):
     try:
         if message.from_user.id != ADMIN_ID:
@@ -68,10 +68,7 @@ async def log_middleware(handler, message, data):
                 )
     except Exception:
         pass
-
-    # Выполняем хендлер и перехватываем ответ бота
-    result = await handler(message, data)
-    return result
+    return await handler(message, data)
 
 pending_photos = {}  # хранит image_data пока ждём вес от пользователя
 user_names = {}  # chat_id -> @username для красивых логов
@@ -446,7 +443,7 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
     try:
         # Шаг 1: модель только распознаёт состав и вес, отдаёт JSON
         step1 = await client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+           model="meta-llama/llama-4-maverick-17b-128e-instruct",
             messages=[
                 {
                     "role": "user",
