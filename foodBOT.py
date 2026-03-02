@@ -35,7 +35,7 @@ keep_alive()
 # ------------------------------------------
 
 BOT_TOKEN = "8235661857:AAHKeHstis6lxuVTh6fn574ack94ZYiVJcY"
-GROQ_API_KEY = "ВАШ_GROQ_API_KEY" # Не забудьте вставить свой ключ в панели Render!
+GROQ_API_KEY = "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" # Не забудьте вставить свой ключ в панели Render!
 ADMIN_ID = 6884407224 
 
 class LoggingBot(Bot):
@@ -71,3 +71,4 @@ client = AsyncGroq(api_key=GROQ_API_KEY)
 # Убедитесь, что в самом конце файла стоит стандартный запуск:
 # if __name__ == "__main__":
 #     asyncio.run(dp.start_polling(bot))
+
