@@ -72,3 +72,4 @@ client = AsyncGroq(api_key=GROQ_API_KEY)
 # if __name__ == "__main__":
 #     asyncio.run(dp.start_polling(bot))
 
+
