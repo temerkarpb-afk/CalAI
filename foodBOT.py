@@ -469,4 +469,155 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
                                 "- суп с фрикадельками и рисом — это СУП С ФРИКАДЕЛЬКАМИ, не хаш и не мисо\n"
                                 "- ВСЕГДА разбивай блюдо на отдельные ингредиенты, никогда не пиши блюдо целиком как один ингредиент\n"
                                 "- Суп: бульон + крупа/картошка + мясо/фрикадельки + овощи\n"
+                                "- Каша с мясом: крупа + мясо + масло\n"
+                                "- Плов: рис + мясо + морковь + лук + масло\n"
+                                "- Борщ: бульон + свёкла + капуста + картофель + морковь + мясо\n"
+                                "- Жареная еда: основной продукт + масло\n"
+                                "- Если реально один продукт (творог, яблоко, хлеб) — тогда один ингредиент\n"
+                                "- Фрикаделька ~30г, котлета ~80г, кусок мяса ~150г\n"
+                                "- Масло сливочное на тарелке: маленький кусочек ~20г, средний ~50г, большой ~100г\n"
+                                "- Тарелка супа ~300-400г, глубокая большая ~500г\n"
+                                "- Порция каши/риса/гречки ~200-250г\n"
+                                "- Порция мяса ~150-200г\n"
+                                "- Стакан молока/кефира ~200г\n"
+                                "- Пачка творога ~200г, половина ~100г\n"
+                                "- 1 яйцо ~60г, 2 яйца ~120г\n"
+                                "- Если продукт лежит на краю тарелки или занимает малую её часть — вес маленький\n"
+                                "- Бульон/вода в супе: вес = общий вес супа минус вес твёрдых ингредиентов"
+                            )
+                        }
+                    ]
+                }
+            ],
+            max_tokens=300
+        )
+
+        raw = step1.choices[0].message.content.strip()
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not json_match:
+            raise ValueError("JSON не найден в ответе модели")
+        data = json.loads(json_match.group())
+
+        dish_name = data.get("dish", "Блюдо")
+        total_weight = manual_weight if manual_weight else data.get("total_weight", 0)
+        if manual_weight:
+            auto_weight = data.get("total_weight", manual_weight)
+            ratio = manual_weight / auto_weight if auto_weight else 1
+            ingredients = [{"name": i["name"], "weight": round(i["weight"] * ratio)} for i in data.get("ingredients", [])]
+        else:
+            ingredients = data.get("ingredients", [])
+
+        kbju_result = calc_from_ingredients(ingredients)
+
+        if kbju_result:
+            percent_str = ""
+            if profile:
+                norm = calculate_kbju(**profile)
+                pct = round(kbju_result["kcal"] / norm["calories"] * 100)
+                percent_str = f"\n📊 От дневной нормы: *{pct}%*"
+
+            await message.answer(
+                f"🍽 Блюдо: {dish_name}, {total_weight}г\n"
+                f"🔥 Калории: {kbju_result['kcal']} ккал\n"
+                f"💪 Белки: {kbju_result['p']} г\n"
+                f"🧈 Жиры: {kbju_result['f']} г\n"
+                f"🍞 Углеводы: {kbju_result['c']} г"
+                f"{percent_str}",
+                parse_mode="Markdown"
+            )
+        else:
+            step2 = await client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Блюдо: {dish_name}, {total_weight}г\n"
+                        f"Состав: {ingredients}\n\n"
+                        f"Дай КБЖУ только в этом формате, без лишнего текста:\n"
+                        f"🍽 Блюдо: {dish_name}, {total_weight}г\n"
+                        f"🔥 Калории: X ккал\n"
+                        f"💪 Белки: X г\n"
+                        f"🧈 Жиры: X г\n"
+                        f"🍞 Углеводы: X г"
+                    )
+                }],
+                max_tokens=200
+            )
+            await message.answer(step2.choices[0].message.content)
+
+    except Exception as e:
+        await message.answer(f"⚠️ Ошибка: {str(e)}")
+
+
+# --- /profile ---
+@dp.message(F.text == "/profile")
+async def show_profile(message: Message):
+    profile = user_profiles.get(message.from_user.id)
+    if not profile:
+        await message.answer("Нет профиля. Напиши /start чтобы создать!")
+        return
+    kbju = calculate_kbju(**profile)
+    goal_emoji = {"похудение": "📉", "поддержание": "⚖️", "набор": "📈"}
+    activity_names = {"1": "сидячий", "2": "лёгкая", "3": "умеренная", "4": "высокая", "5": "очень высокая"}
+    await message.answer(
+        f"👤 Твой профиль:\n\n"
+        f"Пол: {'Мужской' if profile['gender'] == 'м' else 'Женский'}\n"
+        f"Возраст: {profile['age']} лет\n"
+        f"Вес: {profile['weight']} кг\n"
+        f"Рост: {profile['height']} см\n"
+        f"Активность: {activity_names[profile['activity']]}\n"
+        f"Цель: {goal_emoji[profile['goal']]} {profile['goal'].capitalize()}\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"🔥 Норма: *{kbju['calories']} ккал*\n"
+        f"💪 Белки: *{kbju['protein']} г*\n"
+        f"🧈 Жиры: *{kbju['fat']} г*\n"
+        f"🍞 Углеводы: *{kbju['carbs']} г*",
+        parse_mode="Markdown"
+    )
+
+
+@dp.message(F.text)
+async def handle_text(message: Message):
+    await message.answer(
+        "📸 Отправь фото еды!\n\n"
+        "/start — настроить профиль\n"
+        "/profile — моя норма КБЖУ"
+    )
+
+
+async def main():
+    webhook_url = os.environ.get("WEBHOOK_URL", "")
+
+    if webhook_url:
+        await bot.set_webhook(
+            url=f"{webhook_url}/webhook",
+            drop_pending_updates=True
+        )
+
+        app = web.Application()
+
+        async def health(request):
+            return web.Response(text="Bot is running!")
+
+        app.router.add_get("/", health)
+        app.router.add_get("/health", health)
+
+        SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
+        setup_application(app, dp, bot=bot)
+
+        port = int(os.environ.get("PORT", 8080))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, host="0.0.0.0", port=port)
+        await site.start()
+        print(f"Webhook запущен на порту {port}")
+        await asyncio.Event().wait()
+    else:
+        await bot.delete_webhook(drop_pending_updates=True)
+        print("Бот запущен в режиме polling!")
+        await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
                             
+
