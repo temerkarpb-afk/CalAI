@@ -493,6 +493,7 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
         )
 
         raw = step1.choices[0].message.content.strip()
+        # Извлекаем JSON если модель всё равно добавила что-то лишнее
         json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not json_match:
             raise ValueError("JSON не найден в ответе модели")
@@ -500,6 +501,7 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
 
         dish_name = data.get("dish", "Блюдо")
         total_weight = manual_weight if manual_weight else data.get("total_weight", 0)
+        # Если вес задан вручную — пересчитываем вес ингредиентов пропорционально
         if manual_weight:
             auto_weight = data.get("total_weight", manual_weight)
             ratio = manual_weight / auto_weight if auto_weight else 1
@@ -507,9 +509,11 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
         else:
             ingredients = data.get("ingredients", [])
 
+        # Шаг 2: Python считает КБЖУ по базе
         kbju_result = calc_from_ingredients(ingredients)
 
         if kbju_result:
+            # Считаем % от нормы если есть профиль
             percent_str = ""
             if profile:
                 norm = calculate_kbju(**profile)
@@ -526,6 +530,7 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
                 parse_mode="Markdown"
             )
         else:
+            # Продукт не найден в базе — просим модель посчитать
             step2 = await client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[{
@@ -578,6 +583,7 @@ async def show_profile(message: Message):
 
 @dp.message(F.text)
 async def handle_text(message: Message):
+
     await message.answer(
         "📸 Отправь фото еды!\n\n"
         "/start — настроить профиль\n"
@@ -587,37 +593,38 @@ async def handle_text(message: Message):
 
 async def main():
     webhook_url = os.environ.get("WEBHOOK_URL", "")
+    port = int(os.environ.get("PORT", 8080))
+
+    # Веб-сервер запускается ВСЕГДА чтобы Render видел порт
+    app = web.Application()
+
+    async def health(request):
+        return web.Response(text="Bot is running!")
+
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
 
     if webhook_url:
         await bot.set_webhook(
             url=f"{webhook_url}/webhook",
             drop_pending_updates=True
         )
-
-        app = web.Application()
-
-        async def health(request):
-            return web.Response(text="Bot is running!")
-
-        app.router.add_get("/", health)
-        app.router.add_get("/health", health)
-
         SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
         setup_application(app, dp, bot=bot)
 
-        port = int(os.environ.get("PORT", 8080))
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, host="0.0.0.0", port=port)
-        await site.start()
-        print(f"Webhook запущен на порту {port}")
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=port)
+    await site.start()
+    print(f"Веб-сервер запущен на порту {port}")
+
+    if webhook_url:
+        print(f"Режим: webhook -> {webhook_url}/webhook")
         await asyncio.Event().wait()
     else:
         await bot.delete_webhook(drop_pending_updates=True)
-        print("Бот запущен в режиме polling!")
+        print("Режим: polling")
         await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-                            
-
