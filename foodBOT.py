@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from groq import AsyncGroq
 
 BOT_TOKEN = "8235661857:AAHKeHstis6lxuVTh6fn574ack94ZYiVJcY"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 ADMIN_ID = 6884407224  # твой Telegram ID для получения копий
 
 from aiogram.client.default import DefaultBotProperties
@@ -628,4 +628,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
