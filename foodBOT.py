@@ -445,7 +445,7 @@ async def handle_weight_and_analyze(message: Message, state: FSMContext):
     try:
         # Шаг 1: модель только распознаёт состав и вес, отдаёт JSON
         step1 = await client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            model="qwen/qwen3.8-27b",
             messages=[
                 {
                     "role": "user",
