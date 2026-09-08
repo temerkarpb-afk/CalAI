@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from groq import AsyncGroq
 
 BOT_TOKEN = "8235661857:AAHKeHstis6lxuVTh6fn574ack94ZYiVJcY"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 ADMIN_ID = 6884407224  # твой Telegram ID для получения копий
 
 from aiogram.client.default import DefaultBotProperties
